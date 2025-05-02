@@ -1,54 +1,59 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
-data = {
-'Age': [18, 22, 25, 27, 30, 34, 37, 41, 45, 50, 54, 60, 67, 70, 75]
-}
-df = pd.DataFrame(data)
 
-plt.figure(figsize=(10, 4))
-sns.histplot(df['Age'], kde=True, bins=10, color='steelblue', edgecolor='black')
-plt.title("Original Distribution of 'Age'")
-plt.xlabel("Age")
-plt.ylabel("Frequency")
-plt.grid(True)
-plt.show()
+# Load data from Excel
+df = pd.read_excel(r'C:\Users\Cinepix\Downloads\DataDiscretization_Visualization.xlsx')
+data = df.iloc[:, 0].values  
+data = sorted(data)  # Returns a new sorted list
 
-num_bins = 4
-bin_labels = [f'Bin{i+1}' for i in range(num_bins)]
-df['Age_Binned'] = pd.cut(df['Age'], bins=num_bins, labels=bin_labels)
-print("\n== Discretized Data (Equal Width Bins) ==\n")
-print(df)
+# User input for number of bins
+num_bins = int(input("Enter the number of bins: "))
+bin_size = len(data) // num_bins
 
+# Create equi-depth bins
+bins = [data[i * bin_size : (i + 1) * bin_size] for i in range(num_bins - 1)]
+bins.append(data[(num_bins - 1) * bin_size:])
 
+# Bin transformation - means
+mean_bins = [np.full(len(b), np.mean(b)) for b in bins]
 
+# Bin transformation - boundaries
+boundary_bins = [
+    [min(b) if val < (min(b) + max(b)) / 2 else max(b) for val in b] for b in bins
+]
 
+# === Cleanly Print the bin details ===
+print("\nOriginal Bins (Equi-depth):")
+for i, b in enumerate(bins, start=1):
+    print(f"Bin {i}: {[int(val) for val in b]}")
 
+print("\nBin Means:")
+for i, b in enumerate(mean_bins, start=1):
+    print(f"Bin {i}: {[round(float(val), 1) for val in b]}")
 
-vis
-plt.figure(figsize=(8, 4))
-sns.countplot(x='Age_Binned', data=df, palette='Set2', edgecolor='black')
-plt.title("Data After Equal Width Discretization", fontsize=14)
-plt.xlabel("Bins", fontsize=12)
-plt.ylabel("Count", fontsize=12)
-plt.xticks(fontsize=11)
-plt.yticks(fontsize=11)
-plt.box(False)
+print("\nBin Boundaries:")
+for i, b in enumerate(boundary_bins, start=1):
+    print(f"Bin {i}: {[int(val) for val in b]}")
+
+# Flatten all bins for plotting
+original = data
+means = np.concatenate(mean_bins)
+boundaries = np.concatenate(boundary_bins)
+
+# Plot histograms
+titles = ["Original Data", "Bin Means", "Bin Boundaries"]
+datasets = [original, means, boundaries]
+colors = ["skyblue", "orange", "green"]
+
+plt.figure(figsize=(10, 12))
+for i in range(3):
+    plt.subplot(3, 1, i+1)
+    plt.hist(datasets[i], bins=num_bins, color=colors[i], edgecolor='black')
+    plt.title(titles[i])
+    if i == 2: plt.xlabel("Value")
+    plt.ylabel("Frequency")
+    plt.grid(True)
+
 plt.tight_layout()
 plt.show()
-
-fig, axs = plt.subplots(1, 2, figsize=(14, 5))
-sns.histplot(df['Age'], kde=True, bins=10, color='skyblue', edgecolor='black',
-ax=axs[0])
-axs[0].set_title('Original Continuous Data')
-axs[0].set_xlabel('Age')
-axs[0].set_ylabel('Frequency')
-axs[0].grid(True)
-
-sns.countplot(x='Age_Binned', data=df, palette='pastel', edgecolor='black',
-ax=axs[1])
-axs[1].set_title('Discretized Data (Equal Width)')
-axs[1].set_xlabel('Bins')
-axs[1].set_ylabel('Count')
-axs[1].grid(True)
