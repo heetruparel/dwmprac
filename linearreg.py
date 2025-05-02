@@ -1,34 +1,52 @@
-import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
-# Generate synthetic data
-np.random.seed(42)
-X = 2 * np.random.rand(100, 1)
-y = 4 + 3 * X + np.random.randn(100, 1)
+# Step 1: Load Excel data
+df = pd.read_excel(r'C:\Users\Cinepix\Downloads\Linear_Regression.xlsx')
 
-# Manual computation
-X_flat = X.flatten()
-y_flat = y.flatten()
+# Step 2: Extract X and Y values (assuming 1st and 2nd columns)
+X = df.iloc[:, 0].tolist()
+Y = df.iloc[:, 1].tolist()
 
-# Calculate means
-x_mean = np.mean(X_flat)
-y_mean = np.mean(y_flat)
+# Step 3: Calculate Avg(X) and Avg(Y)
+x_bar = sum(X) / len(X)
+y_bar = sum(Y) / len(Y)
 
-# Calculate theta1 and theta0
-theta1 = np.sum((X_flat - x_mean) * (y_flat - y_mean)) / np.sum((X_flat - x_mean)**2)
-theta0 = y_mean - theta1 * x_mean
+print(f"x_bar (Average of X) = {x_bar:.2f}")
+print(f"y_bar (Average of Y) = {y_bar:.2f}")
 
-print(f"Manual Linear Regression Parameters:")
-print(f"Intercept (theta0): {theta0:.2f}")
-print(f"Coefficient (theta1): {theta1:.2f}")
+# Step 4: Calculate β (slope)
+numerator = sum((x - x_bar) * (y - y_bar) for x, y in zip(X, Y))
+denominator = sum((x - x_bar) ** 2 for x in X)
+beta = numerator / denominator
 
-# Predict
-y_pred = theta0 + theta1 * X_flat
+# Step 5: Calculate α (intercept)
+alpha = y_bar - beta * x_bar
 
-# Plot
-plt.scatter(X, y, color='blue')
-plt.plot(X, y_pred, color='red')
-plt.title("Manual Linear Regression Fit")
+# Step 6: Display equation
+print(f"\nβ (Slope) = {beta:.2f}")
+print(f"α (Intercept) = {alpha:.2f}")
+print(f"Linear Regression Equation: y = {alpha:.2f} + {beta:.2f}x")
+
+# Step 7: Plot the data and regression line
+plt.figure(figsize=(8, 5))
+plt.scatter(X, Y, color='blue', label='Data Points')
+
+# Step 8: Predict Y for a given X
+input_x = float(input("Enter an X value to predict Y: "))
+predicted_y = alpha + beta * input_x
+print(f"Predicted Y for X = {input_x:.2f} is: {predicted_y:.2f}")
+
+# Regression line points
+x_line = list(range(min(X), max(X) + 1))
+y_line = [alpha + beta * x for x in x_line]
+
+plt.plot(x_line, y_line, color='red', label='Regression Line')
+
+# Styling the plot
+plt.title("Linear Regression")
 plt.xlabel("X")
-plt.ylabel("y")
+plt.ylabel("Y")
+plt.legend()
+plt.grid(True)
 plt.show()
