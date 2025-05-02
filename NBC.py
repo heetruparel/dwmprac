@@ -1,52 +1,65 @@
-import numpy as np
+import pandas as pd
 
-class NaiveBayesManual:
-    def fit(self, X, y):
-        self.classes = np.unique(y)
-        self.mean = {}
-        self.var = {}
-        self.priors = {}
-        
-        for c in self.classes:
-            X_c = X[y == c]
-            self.mean[c] = X_c.mean(axis=0)
-            self.var[c] = X_c.var(axis=0)
-            self.priors[c] = X_c.shape[0] / X.shape[0]
-    
-    def predict(self, X):
-        predictions = [self._predict(x) for x in X]
-        return np.array(predictions)
-    
-    def _predict(self, x):
-        posteriors = []
-        
-        for c in self.classes:
-            prior = np.log(self.priors[c])
-            class_conditional = np.sum(np.log(self._pdf(c, x)))
-            posterior = prior + class_conditional
-            posteriors.append(posterior)
-        
-        return self.classes[np.argmax(posteriors)]
-    
-    def _pdf(self, class_idx, x):
-        mean = self.mean[class_idx]
-        var = self.var[class_idx]
-        numerator = np.exp(-(x - mean) ** 2 / (2 * var))
-        denominator = np.sqrt(2 * np.pi * var)
-        return numerator / denominator
+#For excel file. Jaha bhi tumhara file stored hai, uska location
+df = pd.read_excel(r'C:\Users\Cinepix\Downloads\Electronics.xlsx')
 
-# Example usage
-from sklearn.datasets import load_iris
 
-iris = load_iris()
-X, y = iris.data, iris.target
+# Assume last column is the class (target)
+target_col = df.columns[-1]
 
-# Only take a small subset (class 0 and 1) for simplicity
-idx = y < 2
-X, y = X[idx], y[idx]
+```Drop R_Id if present. Excel sheet mein check karlo if there is serial Number ka such column```
+if 'R_Id' in df.columns:
+    df = df.drop(columns=['R_Id'])
 
-nb = NaiveBayesManual()
-nb.fit(X, y)
+# Get feature columns (excluding the target column)
+feature_cols = [col for col in df.columns if col != target_col]
 
-y_pred = nb.predict(X)
-print("Manual Naive Bayes Accuracy:", np.mean(y_pred == y))
+# Step 1: Prior probabilities
+total_samples = len(df)
+classes = df[target_col].unique()
+priors = {c: len(df[df[target_col] == c]) / total_samples for c in classes}
+
+print("\nPrior Probabilities:")
+for c in priors:
+    print(f"P({target_col} = '{c}') = {round(priors[c], 3)}")
+
+# Step 2: Likelihoods
+def calc_likelihood(df, feature, feature_value, target_class):
+    subset = df[df[target_col] == target_class]
+    feature_count = len(subset[subset[feature] == feature_value])
+    total_count = len(subset)
+    return feature_count / total_count if total_count > 0 else 0
+
+# Let's say this is the input sample to predict:
+# (Change these values based on actual test case)
+sample = {
+    'Age': 'Youth',
+    'Income': 'Medium',
+    'Student': 'Yes',
+    'Credit Rating': 'Fair'
+}
+
+# Step 3: Calculate likelihoods and posteriors
+likelihoods = {}
+posteriors = {}
+
+print("\nLikelihoods:")
+
+for c in classes:
+    prob = 1
+    print(f"\nFor class = '{c}':")
+    for feature in feature_cols:
+        feature_val = sample.get(feature)
+        likelihood = calc_likelihood(df, feature, feature_val, c)
+        prob *= likelihood
+        print(f"P({feature} = '{feature_val}' | {target_col} = '{c}') = {round(likelihood, 3)}")
+    posteriors[c] = prob * priors[c]
+
+# Step 4: Print posterior probabilities
+print("\nPosterior Probabilities (after applying Bayes' theorem):")
+for c in posteriors:
+    print(f"P(X | {target_col} = '{c}') * P({target_col} = '{c}') = {round(posteriors[c], 3)}")
+
+# Step 5: Predict the class
+prediction = max(posteriors, key=posteriors.get)
+print(f"\nPredicted class: {target_col} = '{prediction}'")
