@@ -1,103 +1,89 @@
-# Basic Node for FP-Tree
-class TreeNode:
-    def __init__(self, name, count, parent):
-        self.name = name            # Item name
-        self.count = count          # Count
-        self.parent = parent        # Parent node
-        self.children = {}          # Children nodes
-        self.link = None            # Link to same item in tree (for header table)
+import pandas as pd
+from itertools import combinations
 
-    def increment(self, count):
-        self.count += count
+# --- Load Excel File ---
+df = pd.read_excel(r'C:\Users\Cinepix\Downloads\Apriori.xlsx')
 
-    def display(self, level=0):
-        print(' ' * level * 2, f'{self.name} ({self.count})')
-        for child in self.children.values():
-            child.display(level + 1)
+# --- Preprocess Transactions ---
+transactions = df['List of item Ids'].dropna().apply(lambda x: set(str(x).strip().lower().split(' '))).tolist()
+num_transactions = len(transactions)
 
-# Create initial set
-def create_initial_set(dataset):
-    ret_dict = {}
-    for trans in dataset:
-        ret_dict[frozenset(trans)] = 1
-    return ret_dict
+# --- User Input ---
+min_support_percent = float(input("Enter minimum support %: "))
+min_confidence_percent = float(input("Enter minimum confidence %: "))
 
-# Build the FP-tree
-def create_fp_tree(dataset, min_support=1):
-    header_table = {}
+# --- Step 1: Minimum Support Count ---
+min_support_count = round((min_support_percent * num_transactions) / 100)
+print(f"\nMinimum Support Count: {min_support_count}")
 
-    # First scan: count frequency
-    for transaction in dataset:
-        for item in transaction:
-            header_table[item] = header_table.get(item, 0) + dataset[transaction]
+# --- Support Count Helper ---
+def count_support(itemset, transactions):
+    return sum(1 for t in transactions if itemset.issubset(t))
 
-    # Remove items not meeting min_support
-    header_table = {k: v for k, v in header_table.items() if v >= min_support}
-    freq_item_set = set(header_table.keys())
+# --- Step 2: Generate C1 and L1 ---
+item_counts = {}
+for transaction in transactions:
+    for item in transaction:
+        itemset = frozenset([item])
+        item_counts[itemset] = item_counts.get(itemset, 0) + 1
 
-    if len(freq_item_set) == 0:
-        return None, None  # No items meet min_support
+C1 = item_counts
+L1 = {itemset: count for itemset, count in C1.items() if count >= min_support_count}
+frequent_itemsets = [L1]
+k = 2
 
-    # Initialize header table: {item: [count, node_link]}
-    for k in header_table:
-        header_table[k] = [header_table[k], None]
+# --- Step 3: Generate Frequent Itemsets ---
+while True:
+    prev_Lk = list(frequent_itemsets[-1].keys())
+    candidates = []
 
-    # Create root of FP-tree
-    root_node = TreeNode('Null', 1, None)
+    for i in range(len(prev_Lk)):
+        for j in range(i + 1, len(prev_Lk)):
+            union = prev_Lk[i].union(prev_Lk[j])
+            if len(union) == k and union not in candidates:
+                subsets = list(combinations(union, k - 1))
+                if all(frozenset(s) in prev_Lk for s in subsets):
+                    candidates.append(union)
 
-    # Second scan: build the tree
-    for transaction, count in dataset.items():
-        localD = {}
-        for item in transaction:
-            if item in freq_item_set:
-                localD[item] = header_table[item][0]  # Get support
+    Ck = {}
+    for candidate in candidates:
+        count = count_support(candidate, transactions)
+        if count >= min_support_count:
+            Ck[frozenset(candidate)] = count
 
-        if len(localD) > 0:
-            # Sort items in descending order of frequency
-            ordered_items = [v[0] for v in sorted(localD.items(), key=lambda p: (-p[1], p[0]))]
-            update_tree(ordered_items, root_node, header_table, count)
+    if not Ck:
+        break
 
-    return root_node, header_table
+    frequent_itemsets.append(Ck)
+    k += 1
 
-# Update tree
-def update_tree(items, inTree, header_table, count):
-    first_item = items[0]
-    if first_item in inTree.children:
-        inTree.children[first_item].increment(count)
-    else:
-        new_node = TreeNode(first_item, count, inTree)
-        inTree.children[first_item] = new_node
+# --- Step 4: Show Final Frequent Itemsets ---
+final_frequent = frequent_itemsets[-1]
+print("\n Final Frequent Itemsets:")
+for itemset in final_frequent:
+    print(set(itemset))
 
-        # Link it to header table
-        if header_table[first_item][1] is None:
-            header_table[first_item][1] = new_node
-        else:
-            update_header(header_table[first_item][1], new_node)
+# --- Step 5: All Association Rules + Strong Rules ---
+all_rules = []
+strong_rules = []
 
-    # Recursively add remaining items
-    if len(items) > 1:
-        update_tree(items[1:], inTree.children[first_item], header_table, count)
+print("\n All Association Rules with Confidence:")
+for itemset, support_count in final_frequent.items():
+    for i in range(1, len(itemset)):
+        for lhs in combinations(itemset, i):
+            lhs = frozenset(lhs)
+            rhs = itemset - lhs
+            if rhs:
+                lhs_count = count_support(lhs, transactions)
+                if lhs_count > 0:
+                    confidence = (support_count / lhs_count) * 100
+                    confidence = round(confidence, 2)
+                    print(f"{set(lhs)} => {set(rhs)} | confidence = {confidence}%")
+                    all_rules.append((lhs, rhs, confidence))
+                    if confidence >= min_confidence_percent:
+                        strong_rules.append((lhs, rhs, confidence))
 
-def update_header(node_to_test, target_node):
-    while node_to_test.link is not None:
-        node_to_test = node_to_test.link
-    node_to_test.link = target_node
-
-# Example transactions
-transactions = [
-    ['milk', 'bread', 'beer'],
-    ['bread', 'diapers', 'eggs'],
-    ['milk', 'bread', 'diapers', 'beer'],
-    ['bread', 'milk', 'diapers', 'eggs'],
-    ['milk', 'bread', 'diapers', 'beer']
-]
-
-# Convert to dictionary
-init_set = create_initial_set(transactions)
-
-# Build tree
-fp_tree, header_table = create_fp_tree(init_set, min_support=3)
-
-# Display tree
-print("FP-Tree Structure:")
-fp_tree.display()
+# --- Step 6: Strong Association Rules ---
+print("\n Strong Association Rules (confidence ≥ " + str(min_confidence_percent) + "%):")
+for lhs, rhs, confidence in strong_rules:
+    print(f"{set(lhs)} => {set(rhs)} | confidence = {confidence}%")
