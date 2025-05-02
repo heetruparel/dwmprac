@@ -1,53 +1,89 @@
-import itertools
+import pandas as pd
+from itertools import combinations
 
-# Dataset
-transactions = [
-    ['Milk', 'Bread', 'Butter'],
-    ['Beer', 'Bread'],
-    ['Milk', 'Bread', 'Butter', 'Beer'],
-    ['Milk', 'Butter'],
-    ['Bread', 'Butter']
-]
+# --- Load Excel File ---
+df = pd.read_excel(r'C:\Users\Cinepix\Downloads\Apriori.xlsx')
 
-# Step 1: Create list of items
-items = set(item for transaction in transactions for item in transaction)
+# --- Preprocess Transactions ---
+transactions = df['List of item Ids'].dropna().apply(lambda x: set(str(x).strip().lower().split(' '))).tolist()
+num_transactions = len(transactions)
 
-# Step 2: Create candidate itemsets
-def create_candidates(items, length):
-    return list(itertools.combinations(items, length))
+# --- User Input ---
+min_support_percent = float(input("Enter minimum support %: "))
+min_confidence_percent = float(input("Enter minimum confidence %: "))
 
-# Step 3: Calculate support
-def calculate_support(transactions, candidates):
-    support_count = {}
-    for candidate in candidates:
-        count = 0
-        for transaction in transactions:
-            if set(candidate).issubset(set(transaction)):
-                count += 1
-        support_count[candidate] = count / len(transactions)
-    return support_count
+# --- Step 1: Minimum Support Count ---
+min_support_count = round((min_support_percent * num_transactions) / 100)
+print(f"\nMinimum Support Count: {min_support_count}")
 
-# Step 4: Filter itemsets with min support
-def filter_candidates(support_count, min_support):
-    return {item: support for item, support in support_count.items() if support >= min_support}
+# --- Support Count Helper ---
+def count_support(itemset, transactions):
+    return sum(1 for t in transactions if itemset.issubset(t))
 
-# Apriori
-min_support = 0.6
-frequent_itemsets = {}
+# --- Step 2: Generate C1 and L1 ---
+item_counts = {}
+for transaction in transactions:
+    for item in transaction:
+        itemset = frozenset([item])
+        item_counts[itemset] = item_counts.get(itemset, 0) + 1
 
-length = 1
-current_items = items
+C1 = item_counts
+L1 = {itemset: count for itemset, count in C1.items() if count >= min_support_count}
+frequent_itemsets = [L1]
+k = 2
 
+# --- Step 3: Generate Frequent Itemsets ---
 while True:
-    candidates = create_candidates(current_items, length)
-    support_count = calculate_support(transactions, candidates)
-    frequent = filter_candidates(support_count, min_support)
-    if not frequent:
-        break
-    frequent_itemsets.update(frequent)
-    current_items = set(item for itemset in frequent for item in itemset)
-    length += 1
+    prev_Lk = list(frequent_itemsets[-1].keys())
+    candidates = []
 
-print("Frequent Itemsets:")
-for itemset, support in frequent_itemsets.items():
-    print(itemset, "=>", round(support, 2))
+    for i in range(len(prev_Lk)):
+        for j in range(i + 1, len(prev_Lk)):
+            union = prev_Lk[i].union(prev_Lk[j])
+            if len(union) == k and union not in candidates:
+                subsets = list(combinations(union, k - 1))
+                if all(frozenset(s) in prev_Lk for s in subsets):
+                    candidates.append(union)
+
+    Ck = {}
+    for candidate in candidates:
+        count = count_support(candidate, transactions)
+        if count >= min_support_count:
+            Ck[frozenset(candidate)] = count
+
+    if not Ck:
+        break
+
+    frequent_itemsets.append(Ck)
+    k += 1
+
+# --- Step 4: Show Final Frequent Itemsets ---
+final_frequent = frequent_itemsets[-1]
+print("\n Final Frequent Itemsets:")
+for itemset in final_frequent:
+    print(set(itemset))
+
+# --- Step 5: All Association Rules + Strong Rules ---
+all_rules = []
+strong_rules = []
+
+print("\n All Association Rules with Confidence:")
+for itemset, support_count in final_frequent.items():
+    for i in range(1, len(itemset)):
+        for lhs in combinations(itemset, i):
+            lhs = frozenset(lhs)
+            rhs = itemset - lhs
+            if rhs:
+                lhs_count = count_support(lhs, transactions)
+                if lhs_count > 0:
+                    confidence = (support_count / lhs_count) * 100
+                    confidence = round(confidence, 2)
+                    print(f"{set(lhs)} => {set(rhs)} | confidence = {confidence}%")
+                    all_rules.append((lhs, rhs, confidence))
+                    if confidence >= min_confidence_percent:
+                        strong_rules.append((lhs, rhs, confidence))
+
+# --- Step 6: Strong Association Rules ---
+print("\n Strong Association Rules (confidence ≥ " + str(min_confidence_percent) + "%):")
+for lhs, rhs, confidence in strong_rules:
+    print(f"{set(lhs)} => {set(rhs)} | confidence = {confidence}%")
